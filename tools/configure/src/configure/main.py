@@ -1290,12 +1290,25 @@ class Configure:
     def make_current(self, ninja: ninja_syntax.Writer):
         current = Path("ver/current")
 
-        try:
-            current.unlink()
-        except Exception:
-            pass
+        if current.exists() or current.is_symlink():
+            try:
+                if current.is_symlink() or current.is_file():
+                    current.unlink()
+                elif current.is_dir():
+                    # ver/current should be a link; remove stale directory if present
+                    shutil.rmtree(current)
+                else:
+                    current.unlink()
+            except Exception:
+                pass
 
-        current.symlink_to(self.version)
+        try:
+            current.symlink_to(self.version)
+        except OSError:
+            if os.name != "nt":
+                raise
+            target = current.parent / self.version
+            subprocess.check_call(["cmd", "/c", "mklink", "/J", str(current), str(target)])
 
         ninja.build("ver/current/build/papermario.z64", "phony", str(self.rom_path()))
 
